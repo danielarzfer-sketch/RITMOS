@@ -6,30 +6,18 @@ import type { Meta, SemanaCalculada } from "@/types/database";
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return (
-      <main className="max-w-xl mx-auto px-4 py-8">
-        <p>Tienes que iniciar sesión para ver tu progreso.</p>
-        {/* TODO: pantalla de login con Supabase Auth */}
-      </main>
-    );
-  }
-
+  // Cargamos la meta activa (si existe en la BD)
   const { data: meta } = await supabase
     .from("metas")
     .select("*")
-    .eq("usuario_id", user.id)
     .eq("activa", true)
-    .single<Meta>();
+    .limit(1)
+    .maybeSingle<Meta>();
 
+  // Cargamos la semana actual
   const { data: semanaActual } = await supabase
     .from("v_semana_calculada")
     .select("*")
-    .eq("usuario_id", user.id)
     .order("semana_inicio", { ascending: false })
     .limit(1)
     .maybeSingle<SemanaCalculada>();
@@ -38,11 +26,18 @@ export default async function DashboardPage() {
     <main className="max-w-xl mx-auto px-4 py-8 space-y-6">
       <h1 className="text-2xl font-bold">Rumbo a la meta</h1>
 
-      {meta && (
+      {meta ? (
         <CuentaAtras
           fechaObjetivo={meta.fecha_objetivo}
           fechaInicio={meta.created_at}
           nombreMeta={meta.nombre}
+        />
+      ) : (
+        /* Cuenta atrás por defecto al 29 de noviembre si aún no hay meta en la BD */
+        <CuentaAtras
+          fechaObjetivo="2026-11-29"
+          fechaInicio="2026-09-01"
+          nombreMeta="Meta 29 de Noviembre"
         />
       )}
 
@@ -75,7 +70,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {meta && <FormularioSesion metaId={meta.id} />}
+      <FormularioSesion metaId={meta?.id || "default-meta"} />
     </main>
   );
 }
