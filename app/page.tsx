@@ -31,6 +31,10 @@ export default function DashboardPage() {
   const [mensajePerfil, setMensajePerfil] = useState("");
   const [errorPerfil, setErrorPerfil] = useState("");
 
+  // Estado para mostrar los datos guardados actualmente en pantalla
+  const [perfilGuardado, setPerfilGuardado] = useState<any>(null);
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+
   const router = useRouter();
   const supabase = createClient();
 
@@ -72,6 +76,7 @@ export default function DashboardPage() {
         setFcMax(perfilData.fc_max ?? "");
         setCarrerasRecientes(perfilData.carreras_recientes ?? "");
         setConsideraciones(perfilData.consideraciones ?? "");
+        setPerfilGuardado(perfilData);
       }
 
       // Cargar resumen semanal
@@ -94,17 +99,21 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!user || !nombreMeta || !fechaObjetivo) return;
 
-    await supabase.from("metas").update({ activa: false }).eq("usuario_id", user.id);
+    try {
+      await supabase.from("metas").update({ activa: false }).eq("usuario_id", user.id);
 
-    const { data, error } = await supabase.from("metas").insert([
-      { usuario_id: user.id, nombre: nombreMeta, fecha_objetivo: fechaObjetivo, activa: true }
-    ]).select().single();
+      const { data, error } = await supabase.from("metas").insert([
+        { usuario_id: user.id, nombre: nombreMeta, fecha_objetivo: fechaObjetivo, activa: true }
+      ]).select().single();
 
-    if (error) {
-      alert("Error al guardar la meta: " + error.message);
-    } else if (data) {
-      setMeta(data);
-      setEditandoMeta(false);
+      if (error) {
+        alert("Error al guardar la meta: " + error.message);
+      } else if (data) {
+        setMeta(data);
+        setEditandoMeta(false);
+      }
+    } catch (err: any) {
+      alert("Error inesperado al guardar la meta: " + (err.message || err));
     }
   };
 
@@ -124,7 +133,7 @@ export default function DashboardPage() {
     setMensajePerfil("");
     setErrorPerfil("");
 
-    const { error } = await supabase.from("perfiles").upsert({
+    const payload = {
       usuario_id: user.id,
       edad: edad !== "" ? Number(edad) : null,
       peso: peso !== "" ? Number(peso) : null,
@@ -133,11 +142,15 @@ export default function DashboardPage() {
       fc_max: fcMax !== "" ? Number(fcMax) : null,
       carreras_recientes: carrerasRecientes,
       consideraciones,
-    }, { onConflict: "usuario_id" });
+    };
+
+    const { data, error } = await supabase.from("perfiles").upsert(payload, { onConflict: "usuario_id" }).select().single();
 
     setGuardandoPerfil(false);
     if (!error) {
       setMensajePerfil("¡Perfil guardado correctamente!");
+      if (data) setPerfilGuardado(data);
+      setEditandoPerfil(false);
       setTimeout(() => setMensajePerfil(""), 3000);
     } else {
       setErrorPerfil("Error al guardar perfil: " + error.message);
@@ -157,7 +170,7 @@ export default function DashboardPage() {
         setResultadoIA(data.error || "Error al analizar.");
       }
     } catch {
-      setResultadoIA("Error de conexión con el servidor.");
+      setResultadoIA("Error de conexión con le servidor.");
     } finally {
       setLoadingAI(false);
     }
@@ -283,61 +296,97 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Bloque de Datos Biométricos */}
+            {/* Bloque de Datos Biométricos con Vista del Perfil Actual */}
             <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
-              <h2 className="font-semibold text-neutral-800">Datos Biométricos y Referencias</h2>
-              <p className="text-xs text-neutral-500">Necesario para calibrar ritmos realistas.</p>
-              
+              <div className="flex justify-between items-center">
+                <h2 className="font-semibold text-neutral-800">Datos Biométricos y Referencias</h2>
+                {perfilGuardado && !editandoPerfil && (
+                  <button onClick={() => setEditandoPerfil(true)} className="text-xs text-blue-600 hover:underline">
+                    Editar Perfil
+                  </button>
+                )}
+              </div>
+
               {mensajePerfil && <div className="p-2 bg-green-50 text-green-700 text-xs rounded text-sm">{mensajePerfil}</div>}
               {errorPerfil && <div className="p-2 bg-red-50 text-red-700 text-xs rounded text-sm">{errorPerfil}</div>}
 
-              <form onSubmit={handleGuardarPerfil} className="space-y-3">
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Edad</label>
-                    <input type="number" value={edad} onChange={(e) => setEdad(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+              {/* Si hay perfil guardado y no se está editando, mostramos qué datos hay guardados */}
+              {perfilGuardado && !editandoPerfil ? (
+                <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200 space-y-2 text-sm text-neutral-700">
+                  <p className="font-medium text-neutral-900 border-b pb-1">📋 Perfil Guardado Actual:</p>
+                  <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                    <div><span className="text-neutral-500">Edad:</span> {perfilGuardado.edad ?? "-"} años</div>
+                    <div><span className="text-neutral-500">Peso:</span> {perfilGuardado.peso ?? "-"} kg</div>
+                    <div><span className="text-neutral-500">Estatura:</span> {perfilGuardado.estatura ?? "-"} cm</div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Peso (kg)</label>
-                    <input type="number" step="0.1" value={peso} onChange={(e) => setPeso(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                    <div><span className="text-neutral-500">FC Reposo:</span> {perfilGuardado.fc_reposo ?? "-"} ppm</div>
+                    <div><span className="text-neutral-500">FC Máxima:</span> {perfilGuardado.fc_max ?? "-"} ppm</div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Estatura (cm)</label>
-                    <input type="number" value={estatura} onChange={(e) => setEstatura(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
-                  </div>
+                  {perfilGuardado.carreras_recientes && (
+                    <div className="text-xs pt-1"><span className="text-neutral-500">Carreras recientes:</span> {perfilGuardado.carreras_recientes}</div>
+                  )}
+                  {perfilGuardado.consideraciones && (
+                    <div className="text-xs pt-1"><span className="text-neutral-500">Consideraciones:</span> {perfilGuardado.consideraciones}</div>
+                  )}
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">FC Reposo (ppm)</label>
-                    <input type="number" placeholder="Ej. 50" value={fcReposo} onChange={(e) => setFcReposo(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+              ) : (
+                <form onSubmit={handleGuardarPerfil} className="space-y-3">
+                  <p className="text-xs text-neutral-500">Introduce o actualiza tus datos para calibrar los ritmos.</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600 mb-1">Edad</label>
+                      <input type="number" value={edad} onChange={(e) => setEdad(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600 mb-1">Peso (kg)</label>
+                      <input type="number" step="0.1" value={peso} onChange={(e) => setPeso(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600 mb-1">Estatura (cm)</label>
+                      <input type="number" value={estatura} onChange={(e) => setEstatura(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">FC Máxima (ppm)</label>
-                    <input type="number" placeholder="Ej. 185" value={fcMax} onChange={(e) => setFcMax(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600 mb-1">FC Reposo (ppm)</label>
+                      <input type="number" placeholder="Ej. 50" value={fcReposo} onChange={(e) => setFcReposo(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600 mb-1">FC Máxima (ppm)</label>
+                      <input type="number" placeholder="Ej. 185" value={fcMax} onChange={(e) => setFcMax(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-neutral-600 mb-1">Últimas carreras (Distancia, tiempo y fecha)</label>
-                  <textarea 
-                    value={carrerasRecientes} 
-                    onChange={(e) => setCarrerasRecientes(e.target.value)} 
-                    rows={2} 
-                    placeholder="Ej. 10k en 49:42 (mayo 2026)..." 
-                    className="w-full px-2 py-1.5 border rounded text-sm" 
-                  />
-                </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Últimas carreras (Distancia, tiempo y fecha)</label>
+                    <textarea 
+                      value={carrerasRecientes} 
+                      onChange={(e) => setCarrerasRecientes(e.target.value)} 
+                      rows={2} 
+                      placeholder="Ej. 10k en 49:42 (mayo 2026)..." 
+                      className="w-full px-2 py-1.5 border rounded text-sm" 
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-neutral-600 mb-1">Consideraciones adicionales</label>
-                  <textarea value={consideraciones} onChange={(e) => setConsideraciones(e.target.value)} rows={2} placeholder="Lesiones, sensaciones..." className="w-full px-2 py-1.5 border rounded text-sm" />
-                </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Consideraciones adicionales</label>
+                    <textarea value={consideraciones} onChange={(e) => setConsideraciones(e.target.value)} rows={2} placeholder="Lesiones, sensaciones..." className="w-full px-2 py-1.5 border rounded text-sm" />
+                  </div>
 
-                <button type="submit" disabled={guardandoPerfil} className="w-full bg-neutral-900 text-white py-2 rounded-lg text-sm font-medium">
-                  {guardandoPerfil ? "Guardando..." : "Actualizar Perfil y Marcas"}
-                </button>
-              </form>
+                  <div className="flex space-x-2">
+                    <button type="submit" disabled={guardandoPerfil} className="flex-1 bg-neutral-900 text-white py-2 rounded-lg text-sm font-medium">
+                      {guardandoPerfil ? "Guardando..." : "Actualizar Perfil y Marcas"}
+                    </button>
+                    {perfilGuardado && (
+                      <button type="button" onClick={() => setEditandoPerfil(false)} className="bg-neutral-200 text-neutral-800 px-3 py-2 rounded-lg text-sm font-medium">
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
             </div>
 
             {/* Sección de IA */}
