@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import CuentaAtras from "@/components/CuentaAtras";
 import FormularioSesion from "@/components/FormularioSesion";
 import type { Meta, SemanaCalculada } from "@/types/database";
@@ -6,25 +7,39 @@ import type { Meta, SemanaCalculada } from "@/types/database";
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  // Cargamos la meta activa (si existe en la BD)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   const { data: meta } = await supabase
     .from("metas")
     .select("*")
+    .eq("usuario_id", user.id)
     .eq("activa", true)
-    .limit(1)
     .maybeSingle<Meta>();
 
-  // Cargamos la semana actual
   const { data: semanaActual } = await supabase
     .from("v_semana_calculada")
     .select("*")
+    .eq("usuario_id", user.id)
     .order("semana_inicio", { ascending: false })
     .limit(1)
     .maybeSingle<SemanaCalculada>();
 
   return (
     <main className="max-w-xl mx-auto px-4 py-8 space-y-6">
-      <h1 className="text-2xl font-bold">Rumbo a la meta</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Rumbo a la meta</h1>
+        <form action="/auth/signout" method="post">
+          <button className="text-xs text-neutral-500 hover:text-black border px-3 py-1.5 rounded-lg">
+            Cerrar sesión
+          </button>
+        </form>
+      </div>
 
       {meta ? (
         <CuentaAtras
@@ -33,12 +48,10 @@ export default async function DashboardPage() {
           nombreMeta={meta.nombre}
         />
       ) : (
-        /* Cuenta atrás por defecto al 29 de noviembre si aún no hay meta en la BD */
-        <CuentaAtras
-          fechaObjetivo="2026-11-29"
-          fechaInicio="2026-09-01"
-          nombreMeta="Meta 29 de Noviembre"
-        />
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-sm text-amber-800">
+          <p className="font-semibold mb-1">No tienes ninguna meta activa</p>
+          <p>Crea una en tu base de datos vinculada a tu usuario (usuario_id: {user.id}) para ver tu cuenta atrás personalizada.</p>
+        </div>
       )}
 
       {semanaActual && (
@@ -70,7 +83,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <FormularioSesion metaId={meta?.id || "default-meta"} />
+      {meta && <FormularioSesion metaId={meta.id} />}
     </main>
   );
 }
