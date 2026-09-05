@@ -1,10 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function POST() {
   try {
@@ -43,9 +41,9 @@ export async function POST() {
       return NextResponse.json({ error: "Primero debes configurar una meta activa." }, { status: 400 });
     }
 
-    // 5. Construcción del prompt para Claude
+    // 5. Construcción del prompt para Gemini
     const prompt = `
-      Eres un entrenador experto en running. Analiza los datos de este atleta:
+      Eres un entrenador experto en running. Analiza los datos de este atleta y dale un asesoramiento preciso:
       - Meta: ${meta.nombre} (Fecha objetivo: ${meta.fecha_objetivo})
       - Perfil biométrico: Edad ${perfil?.edad || 'N/D'}, Peso ${perfil?.peso || 'N/D'}kg, FC Reposo ${perfil?.fc_reposo || 'N/D'} ppm, FC Máx ${perfil?.fc_max || 'N/D'} ppm.
       - Últimas carreras: ${perfil?.carreras_recientes || 'Ninguna registrada'}.
@@ -59,19 +57,16 @@ export async function POST() {
       4. Consejos prácticos para las próximas semanas.
     `;
 
-    const response = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
     });
 
-    // Extraer el texto de la respuesta de Claude
-    const contentBlock = response.content[0];
-    const resultado = contentBlock.type === 'text' ? contentBlock.text : '';
+    const resultado = response.text;
 
     return NextResponse.json({ resultado });
   } catch (err: any) {
-    console.error("Error en API de análisis IA:", err);
+    console.error("Error en API de análisis con Gemini:", err);
     return NextResponse.json({ error: "Error en el servidor: " + (err.message || err) }, { status: 500 });
   }
-}
+}v17
