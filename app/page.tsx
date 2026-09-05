@@ -170,7 +170,7 @@ export default function DashboardPage() {
         setResultadoIA(data.error || "Error al analizar.");
       }
     } catch {
-      setResultadoIA("Error de conexión con le servidor.");
+      setResultadoIA("Error de conexión con el servidor.");
     } finally {
       setLoadingAI(false);
     }
@@ -310,7 +310,6 @@ export default function DashboardPage() {
               {mensajePerfil && <div className="p-2 bg-green-50 text-green-700 text-xs rounded text-sm">{mensajePerfil}</div>}
               {errorPerfil && <div className="p-2 bg-red-50 text-red-700 text-xs rounded text-sm">{errorPerfil}</div>}
 
-              {/* Si hay perfil guardado y no se está editando, mostramos qué datos hay guardados */}
               {perfilGuardado && !editandoPerfil ? (
                 <div className="bg-neutral-50 p-4 rounded-lg border border-neutral-200 space-y-2 text-sm text-neutral-700">
                   <p className="font-medium text-neutral-900 border-b pb-1">📋 Perfil Guardado Actual:</p>
