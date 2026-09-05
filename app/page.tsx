@@ -19,6 +19,17 @@ export default function DashboardPage() {
   const [nombreMeta, setNombreMeta] = useState("");
   const [fechaObjetivo, setFechaObjetivo] = useState("");
 
+  // Estado para el perfil y carreras recientes
+  const [edad, setEdad] = useState("");
+  const [peso, setPeso] = useState("");
+  const [estatura, setEstatura] = useState("");
+  const [fcReposo, setFcReposo] = useState("");
+  const [fcMax, setFcMax] = useState("");
+  const [carrerasRecientes, setCarrerasRecientes] = useState("");
+  const [consideraciones, setConsideraciones] = useState("");
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+  const [mensajePerfil, setMensajePerfil] = useState("");
+
   const router = useRouter();
   const supabase = createClient();
 
@@ -31,6 +42,7 @@ export default function DashboardPage() {
       }
       setUser(user);
 
+      // Cargar meta activa
       const { data: metaData } = await supabase
         .from("metas")
         .select("*")
@@ -44,6 +56,24 @@ export default function DashboardPage() {
         setFechaObjetivo(metaData.fecha_objetivo);
       }
 
+      // Cargar perfil biométrico
+      const { data: perfilData } = await supabase
+        .from("perfiles")
+        .select("*")
+        .eq("usuario_id", user.id)
+        .maybeSingle();
+
+      if (perfilData) {
+        setEdad(perfilData.edad || "");
+        setPeso(perfilData.peso || "");
+        setEstatura(perfilData.estatura || "");
+        setFcReposo(perfilData.fc_reposo || "");
+        setFcMax(perfilData.fc_max || "");
+        setCarrerasRecientes(perfilData.carreras_recientes || "");
+        setConsideraciones(perfilData.consideraciones || "");
+      }
+
+      // Cargar resumen semanal
       const { data: semanaData } = await supabase
         .from("v_semana_calculada")
         .select("*")
@@ -63,15 +93,15 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!user) return;
 
-    // Desactivar metas anteriores
     await supabase.from("metas").update({ activa: false }).eq("usuario_id", user.id);
 
-    // Crear nueva meta
     const { data, error } = await supabase.from("metas").insert([
       { usuario_id: user.id, nombre: nombreMeta, fecha_objetivo: fechaObjetivo, activa: true }
     ]).select().single();
 
-    if (!error && data) {
+    if (error) {
+      alert("Error al guardar la meta: " + error.message);
+    } else if (data) {
       setMeta(data);
       setEditandoMeta(false);
     }
@@ -82,6 +112,34 @@ export default function DashboardPage() {
     await supabase.from("metas").update({ activa: false }).eq("id", meta.id);
     setMeta(null);
     setEditandoMeta(false);
+    setNombreMeta("");
+    setFechaObjetivo("");
+  };
+
+  const handleGuardarPerfil = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setGuardandoPerfil(true);
+    setMensajePerfil("");
+
+    const { error } = await supabase.from("perfiles").upsert({
+      usuario_id: user.id,
+      edad: edad ? Number(edad) : null,
+      peso: peso ? Number(peso) : null,
+      estatura: estatura ? Number(estatura) : null,
+      fc_reposo: fcReposo ? Number(fcReposo) : null,
+      fc_max: fcMax ? Number(fcMax) : null,
+      carreras_recientes: carrerasRecientes,
+      consideraciones,
+    }, { onConflict: "usuario_id" });
+
+    setGuardandoPerfil(false);
+    if (!error) {
+      setMensajePerfil("¡Datos biométricos y marcas guardados correctamente!");
+      setTimeout(() => setMensajePerfil(""), 3000);
+    } else {
+      setMensajePerfil("Error al guardar perfil.");
+    }
   };
 
   const handleAnalizarConIA = async () => {
@@ -109,9 +167,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-neutral-50 pb-12">
       <Navbar />
       <main className="max-w-xl mx-auto px-4 space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-neutral-900">Gestión de Ritmos de Carrera</h1>
-        </div>
+        <h1 className="text-2xl font-bold text-neutral-900">Gestión de Ritmos de Carrera</h1>
 
         {/* Bloque de Meta Opcional */}
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
@@ -128,7 +184,7 @@ export default function DashboardPage() {
             <CuentaAtras fechaObjetivo={meta.fecha_objetivo} fechaInicio={meta.created_at} nombreMeta={meta.nombre} />
           ) : (
             <form onSubmit={handleGuardarMeta} className="space-y-3">
-              <p className="text-xs text-neutral-500">Si no tienes una competición próxima, puedes dejarlo sin meta o configurar una.</p>
+              <p className="text-xs text-neutral-500">Si no tienes competición próxima, puedes dejarlo vacío o configurar una.</p>
               <input
                 type="text"
                 placeholder="Nombre de la meta (ej. Media Maratón)"
@@ -156,33 +212,67 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Resumen Semanal */}
-        {semanaActual && (
-          <div className="bg-white rounded-xl border border-neutral-200 p-5 grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-neutral-400">Km totales semana</p>
-              <p className="text-lg font-semibold">{semanaActual.km_totales_semana} km</p>
+        {/* Bloque de Datos Biométricos, Pulsaciones y Carreras Recientes */}
+        <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
+          <h2 className="font-semibold text-neutral-800">Datos Biométricos y Referencias de Carrera</h2>
+          <p className="text-xs text-neutral-500">Crucial para que la IA entienda tu nivel real y calibre los ritmos.</p>
+          
+          {mensajePerfil && <div className="p-2 bg-green-50 text-green-700 text-xs rounded">{mensajePerfil}</div>}
+
+          <form onSubmit={handleGuardarPerfil} className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">Edad (años)</label>
+                <input type="number" value={edad} onChange={(e) => setEdad(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">Peso (kg)</label>
+                <input type="number" step="0.1" value={peso} onChange={(e) => setPeso(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">Estatura (cm)</label>
+                <input type="number" value={estatura} onChange={(e) => setEstatura(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+              </div>
             </div>
-            <div>
-              <p className="text-neutral-400">Km calidad semana</p>
-              <p className="text-lg font-semibold">{semanaActual.km_calidad_semana} km</p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">FC Reposo (ppm)</label>
+                <input type="number" placeholder="Ej. 50" value={fcReposo} onChange={(e) => setFcReposo(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">FC Máxima (ppm)</label>
+                <input type="number" placeholder="Ej. 185" value={fcMax} onChange={(e) => setFcMax(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+              </div>
             </div>
+
             <div>
-              <p className="text-neutral-400">% Z2 semana</p>
-              <p className="text-lg font-semibold">{semanaActual.pct_z2_semana}%</p>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Últimas carreras (Distancia, tiempo y fecha aproximada)</label>
+              <textarea 
+                value={carrerasRecientes} 
+                onChange={(e) => setCarrerasRecientes(e.target.value)} 
+                rows={2} 
+                placeholder="Ej. 10k en 49:42 (mayo 2026), 5k en 22:15 (marzo 2026)..." 
+                className="w-full px-2 py-1.5 border rounded text-sm" 
+              />
             </div>
+
             <div>
-              <p className="text-neutral-400">% calidad semana</p>
-              <p className="text-lg font-semibold">{semanaActual.pct_calidad_semana}%</p>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Consideraciones adicionales</label>
+              <textarea value={consideraciones} onChange={(e) => setConsideraciones(e.target.value)} rows={2} placeholder="Lesiones recientes, sensaciones..." className="w-full px-2 py-1.5 border rounded text-sm" />
             </div>
-          </div>
-        )}
+
+            <button type="submit" disabled={guardandoPerfil} className="w-full bg-neutral-900 text-white py-2 rounded-lg text-sm font-medium">
+              {guardandoPerfil ? "Guardando..." : "Actualizar Perfil y Marcas"}
+            </button>
+          </form>
+        </div>
 
         {/* Sección de IA (Gemini) */}
         <div className="bg-white border border-neutral-200 p-5 rounded-xl space-y-3 shadow-sm">
-          <h2 className="font-semibold text-neutral-800">Coach IA: Cálculo de Ritmos (Easy, Long, Umbral, Z4, Z5)</h2>
+          <h2 className="font-semibold text-neutral-800">Coach IA: Cálculo de Ritmos</h2>
           <p className="text-sm text-neutral-600">
-            Gemini analizará tu historial, peso, estatura y edad para darte tus zonas exactas.
+            Genera tus zonas basándose en tus entrenamientos, pulsaciones y marcas recientes.
           </p>
           <button
             onClick={handleAnalizarConIA}
