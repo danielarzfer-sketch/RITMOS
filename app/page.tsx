@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [editandoMeta, setEditandoMeta] = useState(false);
   const [nombreMeta, setNombreMeta] = useState("");
   const [fechaObjetivo, setFechaObjetivo] = useState("");
+  const [pestanaActiva, setPestanaActiva] = useState<"resumen" | "entrenamientos">("resumen");
 
   // Estado para el perfil y marcas
   const [edad, setEdad] = useState("");
@@ -93,7 +94,6 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!user || !nombreMeta || !fechaObjetivo) return;
 
-    // Desactivar metas anteriores antes de insertar la nueva para evitar conflictos únicos
     await supabase.from("metas").update({ activa: false }).eq("usuario_id", user.id);
 
     const { data, error } = await supabase.from("metas").insert([
@@ -124,7 +124,6 @@ export default function DashboardPage() {
     setMensajePerfil("");
     setErrorPerfil("");
 
-    // Usamos upsert asegurando la estructura exacta de la tabla perfiles
     const { error } = await supabase.from("perfiles").upsert({
       usuario_id: user.id,
       edad: edad !== "" ? Number(edad) : null,
@@ -164,7 +163,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Cálculo de días y barra de progreso verde
   const calcularProgresoMeta = () => {
     if (!meta) return { diasRestantes: 0, porcentaje: 0, inicioStr: "", objetivoStr: "" };
     const hoy = new Date().getTime();
@@ -193,151 +191,190 @@ export default function DashboardPage() {
       <main className="max-w-xl mx-auto px-4 space-y-6 pt-4">
         <h1 className="text-2xl font-bold text-neutral-900">Gestión de Ritmos de Carrera</h1>
 
-        {/* Bloque de Meta con Barra de Progreso Verde y Cuenta Atrás */}
-        <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="font-semibold text-neutral-800 flex items-center space-x-2">
-              <span>🎯</span>
-              <span>{meta ? meta.nombre : "Objetivo de Competición"}</span>
-            </h2>
-            {meta && !editandoMeta && (
-              <button onClick={() => setEditandoMeta(true)} className="text-xs text-blue-600 hover:underline">
-                Editar / Cambiar meta
-              </button>
-            )}
-          </div>
+        {/* Selector de Pestañas */}
+        <div className="flex border-b border-neutral-200 space-x-6">
+          <button
+            onClick={() => setPestanaActiva("resumen")}
+            className={`pb-3 font-medium text-sm transition-colors border-b-2 ${
+              pestanaActiva === "resumen"
+                ? "border-black text-black"
+                : "border-transparent text-neutral-500 hover:text-neutral-800"
+            }`}
+          >
+            📊 Resumen y Meta
+          </button>
+          <button
+            onClick={() => setPestanaActiva("entrenamientos")}
+            className={`pb-3 font-medium text-sm transition-colors border-b-2 ${
+              pestanaActiva === "entrenamientos"
+                ? "border-black text-black"
+                : "border-transparent text-neutral-500 hover:text-neutral-800"
+            }`}
+          >
+            🏃‍♂️ Añadir Entrenamientos
+          </button>
+        </div>
 
-          {meta && !editandoMeta ? (
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="font-bold text-neutral-900 text-xl">{progreso.diasRestantes} días</span>
-                <span className="text-xs text-neutral-500">faltan para la meta</span>
-              </div>
-
-              {/* Línea verde de progreso */}
-              <div className="w-full bg-neutral-100 h-3 rounded-full overflow-hidden">
-                <div 
-                  className="bg-green-500 h-full transition-all duration-500 rounded-full" 
-                  style={{ width: `${progreso.porcentaje}%` }}
-                ></div>
-              </div>
-
-              <div className="flex justify-between text-xs text-neutral-500 pt-1">
-                <span>Inicio: {progreso.inicioStr}</span>
-                <span>Objetivo: {progreso.objetivoStr}</span>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={handleGuardarMeta} className="space-y-3">
-              <p className="text-xs text-neutral-500">Configura tu próxima carrera para fijar el punto de partida y la línea de progreso.</p>
-              <input
-                type="text"
-                placeholder="Nombre de la meta (ej. Media Maratón)"
-                value={nombreMeta}
-                onChange={(e) => setNombreMeta(e.target.value)}
-                required
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-              />
-              <input
-                type="date"
-                value={fechaObjetivo}
-                onChange={(e) => setFechaObjetivo(e.target.value)}
-                required
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-              />
-              <div className="flex space-x-2">
-                <button type="submit" className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium">
-                  Guardar Meta
-                </button>
-                {meta && (
-                  <button type="button" onClick={handleEliminarMeta} className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-medium">
-                    Eliminar Meta
+        {/* PESTAÑA 1: RESUMEN, META Y PERFIL */}
+        {pestanaActiva === "resumen" && (
+          <div className="space-y-6">
+            {/* Bloque de Meta con Barra de Progreso Verde */}
+            <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="font-semibold text-neutral-800 flex items-center space-x-2">
+                  <span>🎯</span>
+                  <span>{meta ? meta.nombre : "Objetivo de Competición"}</span>
+                </h2>
+                {meta && !editandoMeta && (
+                  <button onClick={() => setEditandoMeta(true)} className="text-xs text-blue-600 hover:underline">
+                    Editar / Cambiar meta
                   </button>
                 )}
               </div>
-            </form>
-          )}
-        </div>
 
-        {/* Bloque de Datos Biométricos, Pulsaciones y Carreras Recientes */}
-        <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
-          <h2 className="font-semibold text-neutral-800">Datos Biométricos y Referencias</h2>
-          <p className="text-xs text-neutral-500">Necesario para calibrar ritmos realistas.</p>
-          
-          {mensajePerfil && <div className="p-2 bg-green-50 text-green-700 text-xs rounded text-sm">{mensajePerfil}</div>}
-          {errorPerfil && <div className="p-2 bg-red-50 text-red-700 text-xs rounded text-sm">{errorPerfil}</div>}
+              {meta && !editandoMeta ? (
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-bold text-neutral-900 text-xl">{progreso.diasRestantes} días</span>
+                    <span className="text-xs text-neutral-500">faltan para la meta</span>
+                  </div>
 
-          <form onSubmit={handleGuardarPerfil} className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Edad</label>
-                <input type="number" value={edad} onChange={(e) => setEdad(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Peso (kg)</label>
-                <input type="number" step="0.1" value={peso} onChange={(e) => setPeso(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Estatura (cm)</label>
-                <input type="number" value={estatura} onChange={(e) => setEstatura(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
-              </div>
+                  <div className="w-full bg-neutral-100 h-3 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-green-500 h-full transition-all duration-500 rounded-full" 
+                      style={{ width: `${progreso.porcentaje}%` }}
+                    ></div>
+                  </div>
+
+                  <div className="flex justify-between text-xs text-neutral-500 pt-1">
+                    <span>Inicio: {progreso.inicioStr}</span>
+                    <span>Objetivo: {progreso.objetivoStr}</span>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleGuardarMeta} className="space-y-3">
+                  <p className="text-xs text-neutral-500">Configura tu próxima carrera para fijar el punto de partida y la línea de progreso.</p>
+                  <input
+                    type="text"
+                    placeholder="Nombre de la meta (ej. Media Maratón)"
+                    value={nombreMeta}
+                    onChange={(e) => setNombreMeta(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                  <input
+                    type="date"
+                    value={fechaObjetivo}
+                    onChange={(e) => setFechaObjetivo(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                  <div className="flex space-x-2">
+                    <button type="submit" className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium">
+                      Guardar Meta
+                    </button>
+                    {meta && (
+                      <button type="button" onClick={handleEliminarMeta} className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-medium">
+                        Eliminar Meta
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">FC Reposo (ppm)</label>
-                <input type="number" placeholder="Ej. 50" value={fcReposo} onChange={(e) => setFcReposo(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+            {/* Bloque de Datos Biométricos */}
+            <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
+              <h2 className="font-semibold text-neutral-800">Datos Biométricos y Referencias</h2>
+              <p className="text-xs text-neutral-500">Necesario para calibrar ritmos realistas.</p>
+              
+              {mensajePerfil && <div className="p-2 bg-green-50 text-green-700 text-xs rounded text-sm">{mensajePerfil}</div>}
+              {errorPerfil && <div className="p-2 bg-red-50 text-red-700 text-xs rounded text-sm">{errorPerfil}</div>}
+
+              <form onSubmit={handleGuardarPerfil} className="space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Edad</label>
+                    <input type="number" value={edad} onChange={(e) => setEdad(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Peso (kg)</label>
+                    <input type="number" step="0.1" value={peso} onChange={(e) => setPeso(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Estatura (cm)</label>
+                    <input type="number" value={estatura} onChange={(e) => setEstatura(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">FC Reposo (ppm)</label>
+                    <input type="number" placeholder="Ej. 50" value={fcReposo} onChange={(e) => setFcReposo(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">FC Máxima (ppm)</label>
+                    <input type="number" placeholder="Ej. 185" value={fcMax} onChange={(e) => setFcMax(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Últimas carreras (Distancia, tiempo y fecha)</label>
+                  <textarea 
+                    value={carrerasRecientes} 
+                    onChange={(e) => setCarrerasRecientes(e.target.value)} 
+                    rows={2} 
+                    placeholder="Ej. 10k en 49:42 (mayo 2026)..." 
+                    className="w-full px-2 py-1.5 border rounded text-sm" 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Consideraciones adicionales</label>
+                  <textarea value={consideraciones} onChange={(e) => setConsideraciones(e.target.value)} rows={2} placeholder="Lesiones, sensaciones..." className="w-full px-2 py-1.5 border rounded text-sm" />
+                </div>
+
+                <button type="submit" disabled={guardandoPerfil} className="w-full bg-neutral-900 text-white py-2 rounded-lg text-sm font-medium">
+                  {guardandoPerfil ? "Guardando..." : "Actualizar Perfil y Marcas"}
+                </button>
+              </form>
+            </div>
+
+            {/* Sección de IA */}
+            <div className="bg-white border border-neutral-200 p-5 rounded-xl space-y-3 shadow-sm">
+              <h2 className="font-semibold text-neutral-800">Asesoramiento IA: Ritmo Objetivo y Zonas</h2>
+              <p className="text-sm text-neutral-600">
+                Analiza tus datos para ofrecerte un ritmo objetivo realista para tu meta y tus zonas de entrenamiento precisas.
+              </p>
+              <button
+                onClick={handleAnalizarConIA}
+                disabled={loadingAI}
+                className="w-full bg-black text-white py-2.5 rounded-lg font-medium hover:bg-neutral-800 transition disabled:opacity-50"
+              >
+                {loadingAI ? "Calculando asesoramiento y ritmos..." : "Analizar con IA 🤖"}
+              </button>
+
+              {resultadoIA && (
+                <div className="mt-4 p-4 bg-neutral-50 border border-neutral-200 rounded-lg text-sm whitespace-pre-wrap text-neutral-800 leading-relaxed">
+                  {resultadoIA}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* PESTAÑA 2: AÑADIR ENTRENAMIENTOS */}
+        {pestanaActiva === "entrenamientos" && (
+          <div className="space-y-4">
+            {!meta ? (
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-sm text-amber-800">
+                Debes crear o configurar una meta primero en la pestaña de <strong>Resumen y Meta</strong> para poder asociar tus entrenamientos.
               </div>
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">FC Máxima (ppm)</label>
-                <input type="number" placeholder="Ej. 185" value={fcMax} onChange={(e) => setFcMax(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Últimas carreras (Distancia, tiempo y fecha)</label>
-              <textarea 
-                value={carrerasRecientes} 
-                onChange={(e) => setCarrerasRecientes(e.target.value)} 
-                rows={2} 
-                placeholder="Ej. 10k en 49:42 (mayo 2026)..." 
-                className="w-full px-2 py-1.5 border rounded text-sm" 
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Consideraciones adicionales</label>
-              <textarea value={consideraciones} onChange={(e) => setConsideraciones(e.target.value)} rows={2} placeholder="Lesiones, sensaciones..." className="w-full px-2 py-1.5 border rounded text-sm" />
-            </div>
-
-            <button type="submit" disabled={guardandoPerfil} className="w-full bg-neutral-900 text-white py-2 rounded-lg text-sm font-medium">
-              {guardandoPerfil ? "Guardando..." : "Actualizar Perfil y Marcas"}
-            </button>
-          </form>
-        </div>
-
-        {/* Sección de IA (Coach, Ritmo Objetivo Realista y Zonas) */}
-        <div className="bg-white border border-neutral-200 p-5 rounded-xl space-y-3 shadow-sm">
-          <h2 className="font-semibold text-neutral-800">Asesoramiento IA: Ritmo Objetivo y Zonas</h2>
-          <p className="text-sm text-neutral-600">
-            Analiza tus datos para ofrecerte un ritmo objetivo realista para tu meta y tus zonas de entrenamiento precisas.
-          </p>
-          <button
-            onClick={handleAnalizarConIA}
-            disabled={loadingAI}
-            className="w-full bg-black text-white py-2.5 rounded-lg font-medium hover:bg-neutral-800 transition disabled:opacity-50"
-          >
-            {loadingAI ? "Calculando asesoramiento y ritmos..." : "Analizar con IA 🤖"}
-          </button>
-
-          {resultadoIA && (
-            <div className="mt-4 p-4 bg-neutral-50 border border-neutral-200 rounded-lg text-sm whitespace-pre-wrap text-neutral-800 leading-relaxed">
-              {resultadoIA}
-            </div>
-          )}
-        </div>
-
-        {meta && <FormularioSesion metaId={meta.id} />}
+            ) : (
+              <FormularioSesion metaId={meta.id} />
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
