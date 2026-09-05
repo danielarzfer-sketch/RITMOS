@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import CuentaAtras from "@/components/CuentaAtras";
 import FormularioSesion from "@/components/FormularioSesion";
 import type { Meta, SemanaCalculada } from "@/types/database";
 
@@ -19,7 +18,7 @@ export default function DashboardPage() {
   const [nombreMeta, setNombreMeta] = useState("");
   const [fechaObjetivo, setFechaObjetivo] = useState("");
 
-  // Estado para el perfil, carreras recientes y Garmin
+  // Estado para el perfil y marcas
   const [edad, setEdad] = useState("");
   const [peso, setPeso] = useState("");
   const [estatura, setEstatura] = useState("");
@@ -29,6 +28,7 @@ export default function DashboardPage() {
   const [consideraciones, setConsideraciones] = useState("");
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [mensajePerfil, setMensajePerfil] = useState("");
+  const [errorPerfil, setErrorPerfil] = useState("");
 
   const router = useRouter();
   const supabase = createClient();
@@ -64,13 +64,13 @@ export default function DashboardPage() {
         .maybeSingle();
 
       if (perfilData) {
-        setEdad(perfilData.edad || "");
-        setPeso(perfilData.peso || "");
-        setEstatura(perfilData.estatura || "");
-        setFcReposo(perfilData.fc_reposo || "");
-        setFcMax(perfilData.fc_max || "");
-        setCarrerasRecientes(perfilData.carreras_recientes || "");
-        setConsideraciones(perfilData.consideraciones || "");
+        setEdad(perfilData.edad ?? "");
+        setPeso(perfilData.peso ?? "");
+        setEstatura(perfilData.estatura ?? "");
+        setFcReposo(perfilData.fc_reposo ?? "");
+        setFcMax(perfilData.fc_max ?? "");
+        setCarrerasRecientes(perfilData.carreras_recientes ?? "");
+        setConsideraciones(perfilData.consideraciones ?? "");
       }
 
       // Cargar resumen semanal
@@ -91,8 +91,9 @@ export default function DashboardPage() {
 
   const handleGuardarMeta = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !nombreMeta || !fechaObjetivo) return;
 
+    // Desactivar metas anteriores antes de insertar la nueva para evitar conflictos únicos
     await supabase.from("metas").update({ activa: false }).eq("usuario_id", user.id);
 
     const { data, error } = await supabase.from("metas").insert([
@@ -121,24 +122,26 @@ export default function DashboardPage() {
     if (!user) return;
     setGuardandoPerfil(true);
     setMensajePerfil("");
+    setErrorPerfil("");
 
+    // Usamos upsert asegurando la estructura exacta de la tabla perfiles
     const { error } = await supabase.from("perfiles").upsert({
       usuario_id: user.id,
-      edad: edad ? Number(edad) : null,
-      peso: peso ? Number(peso) : null,
-      estatura: estatura ? Number(estatura) : null,
-      fc_reposo: fcReposo ? Number(fcReposo) : null,
-      fc_max: fcMax ? Number(fcMax) : null,
+      edad: edad !== "" ? Number(edad) : null,
+      peso: peso !== "" ? Number(peso) : null,
+      estatura: estatura !== "" ? Number(estatura) : null,
+      fc_reposo: fcReposo !== "" ? Number(fcReposo) : null,
+      fc_max: fcMax !== "" ? Number(fcMax) : null,
       carreras_recientes: carrerasRecientes,
       consideraciones,
     }, { onConflict: "usuario_id" });
 
     setGuardandoPerfil(false);
     if (!error) {
-      setMensajePerfil("¡Datos biométricos y marcas guardados correctamente!");
+      setMensajePerfil("¡Perfil guardado correctamente!");
       setTimeout(() => setMensajePerfil(""), 3000);
     } else {
-      setMensajePerfil("Error al guardar perfil.");
+      setErrorPerfil("Error al guardar perfil: " + error.message);
     }
   };
 
@@ -161,33 +164,42 @@ export default function DashboardPage() {
     }
   };
 
+  // Cálculo de días y barra de progreso verde
+  const calcularProgresoMeta = () => {
+    if (!meta) return { diasRestantes: 0, porcentaje: 0, inicioStr: "", objetivoStr: "" };
+    const hoy = new Date().getTime();
+    const inicio = new Date(meta.created_at).getTime();
+    const objetivo = new Date(meta.fecha_objetivo).getTime();
+
+    const totalDias = Math.max(1, Math.ceil((objetivo - inicio) / (1000 * 60 * 60 * 24)));
+    const diasTranscurridos = Math.max(0, Math.ceil((hoy - inicio) / (1000 * 60 * 60 * 24)));
+    const diasRestantes = Math.max(0, Math.ceil((objetivo - hoy) / (1000 * 60 * 60 * 24)));
+
+    let porcentaje = Math.min(100, Math.max(0, (diasTranscurridos / totalDias) * 100));
+
+    const inicioStr = new Date(meta.created_at).toLocaleDateString();
+    const objetivoStr = new Date(meta.fecha_objetivo).toLocaleDateString();
+
+    return { diasRestantes, porcentaje, inicioStr, objetivoStr };
+  };
+
+  const progreso = calcularProgresoMeta();
+
   if (loading) return <div className="text-center py-20 text-neutral-500">Cargando panel...</div>;
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-12">
       <Navbar />
-      <main className="max-w-xl mx-auto px-4 space-y-6">
+      <main className="max-w-xl mx-auto px-4 space-y-6 pt-4">
         <h1 className="text-2xl font-bold text-neutral-900">Gestión de Ritmos de Carrera</h1>
 
-        {/* Bloque de Integración con Garmin */}
-        <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-3">
-          <h2 className="font-semibold text-neutral-800">Sincronización con Garmin</h2>
-          <p className="text-xs text-neutral-500">Conecta tu cuenta para importar automáticamente tus entrenamientos y marcas sin introducirlos a mano.</p>
-          
-          <button
-            onClick={() => {
-              window.location.href = "/api/garmin/auth";
-            }}
-            className="w-full bg-[#007cc3] hover:bg-[#00659d] text-white py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center space-x-2"
-          >
-            <span>Conectar con Garmin</span>
-          </button>
-        </div>
-
-        {/* Bloque de Meta Opcional */}
+        {/* Bloque de Meta con Barra de Progreso Verde y Cuenta Atrás */}
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="font-semibold text-neutral-800">Objetivo de Competición</h2>
+            <h2 className="font-semibold text-neutral-800 flex items-center space-x-2">
+              <span>🎯</span>
+              <span>{meta ? meta.nombre : "Objetivo de Competición"}</span>
+            </h2>
             {meta && !editandoMeta && (
               <button onClick={() => setEditandoMeta(true)} className="text-xs text-blue-600 hover:underline">
                 Editar / Cambiar meta
@@ -196,21 +208,41 @@ export default function DashboardPage() {
           </div>
 
           {meta && !editandoMeta ? (
-            <CuentaAtras fechaObjetivo={meta.fecha_objetivo} fechaInicio={meta.created_at} nombreMeta={meta.nombre} />
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="font-bold text-neutral-900 text-xl">{progreso.diasRestantes} días</span>
+                <span className="text-xs text-neutral-500">faltan para la meta</span>
+              </div>
+
+              {/* Línea verde de progreso */}
+              <div className="w-full bg-neutral-100 h-3 rounded-full overflow-hidden">
+                <div 
+                  className="bg-green-500 h-full transition-all duration-500 rounded-full" 
+                  style={{ width: `${progreso.porcentaje}%` }}
+                ></div>
+              </div>
+
+              <div className="flex justify-between text-xs text-neutral-500 pt-1">
+                <span>Inicio: {progreso.inicioStr}</span>
+                <span>Objetivo: {progreso.objetivoStr}</span>
+              </div>
+            </div>
           ) : (
             <form onSubmit={handleGuardarMeta} className="space-y-3">
-              <p className="text-xs text-neutral-500">Si no tienes competición próxima, puedes dejarlo vacío o configurar una.</p>
+              <p className="text-xs text-neutral-500">Configura tu próxima carrera para fijar el punto de partida y la línea de progreso.</p>
               <input
                 type="text"
                 placeholder="Nombre de la meta (ej. Media Maratón)"
                 value={nombreMeta}
                 onChange={(e) => setNombreMeta(e.target.value)}
+                required
                 className="w-full px-3 py-2 border rounded-lg text-sm"
               />
               <input
                 type="date"
                 value={fechaObjetivo}
                 onChange={(e) => setFechaObjetivo(e.target.value)}
+                required
                 className="w-full px-3 py-2 border rounded-lg text-sm"
               />
               <div className="flex space-x-2">
@@ -229,15 +261,16 @@ export default function DashboardPage() {
 
         {/* Bloque de Datos Biométricos, Pulsaciones y Carreras Recientes */}
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
-          <h2 className="font-semibold text-neutral-800">Datos Biométricos y Referencias de Carrera</h2>
-          <p className="text-xs text-neutral-500">Crucial para que la IA entienda tu nivel real y calibre los ritmos.</p>
+          <h2 className="font-semibold text-neutral-800">Datos Biométricos y Referencias</h2>
+          <p className="text-xs text-neutral-500">Necesario para calibrar ritmos realistas.</p>
           
-          {mensajePerfil && <div className="p-2 bg-green-50 text-green-700 text-xs rounded">{mensajePerfil}</div>}
+          {mensajePerfil && <div className="p-2 bg-green-50 text-green-700 text-xs rounded text-sm">{mensajePerfil}</div>}
+          {errorPerfil && <div className="p-2 bg-red-50 text-red-700 text-xs rounded text-sm">{errorPerfil}</div>}
 
           <form onSubmit={handleGuardarPerfil} className="space-y-3">
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Edad (años)</label>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">Edad</label>
                 <input type="number" value={edad} onChange={(e) => setEdad(e.target.value)} className="w-full px-2 py-1.5 border rounded text-sm" />
               </div>
               <div>
@@ -262,19 +295,19 @@ export default function DashboardPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Últimas carreras (Distancia, tiempo y fecha aproximada)</label>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Últimas carreras (Distancia, tiempo y fecha)</label>
               <textarea 
                 value={carrerasRecientes} 
                 onChange={(e) => setCarrerasRecientes(e.target.value)} 
                 rows={2} 
-                placeholder="Ej. 10k en 49:42 (mayo 2026), 5k en 22:15 (marzo 2026)..." 
+                placeholder="Ej. 10k en 49:42 (mayo 2026)..." 
                 className="w-full px-2 py-1.5 border rounded text-sm" 
               />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-neutral-600 mb-1">Consideraciones adicionales</label>
-              <textarea value={consideraciones} onChange={(e) => setConsideraciones(e.target.value)} rows={2} placeholder="Lesiones recientes, sensaciones..." className="w-full px-2 py-1.5 border rounded text-sm" />
+              <textarea value={consideraciones} onChange={(e) => setConsideraciones(e.target.value)} rows={2} placeholder="Lesiones, sensaciones..." className="w-full px-2 py-1.5 border rounded text-sm" />
             </div>
 
             <button type="submit" disabled={guardandoPerfil} className="w-full bg-neutral-900 text-white py-2 rounded-lg text-sm font-medium">
@@ -283,22 +316,22 @@ export default function DashboardPage() {
           </form>
         </div>
 
-        {/* Sección de IA (Gemini) */}
+        {/* Sección de IA (Coach, Ritmo Objetivo Realista y Zonas) */}
         <div className="bg-white border border-neutral-200 p-5 rounded-xl space-y-3 shadow-sm">
-          <h2 className="font-semibold text-neutral-800">Coach IA: Cálculo de Ritmos</h2>
+          <h2 className="font-semibold text-neutral-800">Asesoramiento IA: Ritmo Objetivo y Zonas</h2>
           <p className="text-sm text-neutral-600">
-            Genera tus zonas basándose en tus entrenamientos, pulsaciones y marcas recientes.
+            Analiza tus datos para ofrecerte un ritmo objetivo realista para tu meta y tus zonas de entrenamiento precisas.
           </p>
           <button
             onClick={handleAnalizarConIA}
             disabled={loadingAI}
             className="w-full bg-black text-white py-2.5 rounded-lg font-medium hover:bg-neutral-800 transition disabled:opacity-50"
           >
-            {loadingAI ? "Calculando ritmos con IA..." : "Analizar con IA 🤖"}
+            {loadingAI ? "Calculando asesoramiento y ritmos..." : "Analizar con IA 🤖"}
           </button>
 
           {resultadoIA && (
-            <div className="mt-4 p-4 bg-neutral-50 border border-neutral-200 rounded-lg text-sm whitespace-pre-wrap text-neutral-800">
+            <div className="mt-4 p-4 bg-neutral-50 border border-neutral-200 rounded-lg text-sm whitespace-pre-wrap text-neutral-800 leading-relaxed">
               {resultadoIA}
             </div>
           )}
