@@ -19,7 +19,7 @@ export default function DashboardPage() {
   const [nombreMeta, setNombreMeta] = useState("");
   const [fechaObjetivo, setFechaObjetivo] = useState("");
 
-  // Estado para el perfil y carreras recientes
+  // Estado para el perfil, carreras recientes y Garmin
   const [edad, setEdad] = useState("");
   const [peso, setPeso] = useState("");
   const [estatura, setEstatura] = useState("");
@@ -168,6 +168,21 @@ export default function DashboardPage() {
       <Navbar />
       <main className="max-w-xl mx-auto px-4 space-y-6">
         <h1 className="text-2xl font-bold text-neutral-900">Gestión de Ritmos de Carrera</h1>
+
+        {/* Bloque de Integración con Garmin */}
+        <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-3">
+          <h2 className="font-semibold text-neutral-800">Sincronización con Garmin</h2>
+          <p className="text-xs text-neutral-500">Conecta tu cuenta para importar automáticamente tus entrenamientos y marcas sin introducirlos a mano.</p>
+          
+          <button
+            onClick={() => {
+              window.location.href = "/api/garmin/auth";
+            }}
+            className="w-full bg-[#007cc3] hover:bg-[#00659d] text-white py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center space-x-2"
+          >
+            <span>Conectar con Garmin</span>
+          </button>
+        </div>
 
         {/* Bloque de Meta Opcional */}
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm space-y-4">
